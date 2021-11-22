@@ -1,0 +1,9 @@
+{
+  "name": "shieldgenerator",
+  "version": "0.1.0",
+  "title": "Shield Generator",
+  "author": "JCP",
+  "factorio_version": "1.1",
+  "dependencies": ["base >= 1.1"],
+  "description": "This mod adds shields"
+}
