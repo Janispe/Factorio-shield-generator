@@ -125,11 +125,35 @@ data:extend(prototypes)
 table.insert(data.raw["artillery-projectile"]["artillery-projectile"].action.action_delivery.target_effects,1,
 {
 	type = "script",
-	effect_id = "shield_explosion"
+	effect_id = "shield_explosion_artillery"
 })
 
 table.insert(data.raw["projectile"]["grenade"].action[2].action_delivery.target_effects,1,
 {
 	type = "script",
-	effect_id = "shield_explosion"
+	effect_id = "shield_explosion_grenade"
 })
+
+table.insert(data.raw["projectile"]["explosive-rocket"].action.action_delivery.target_effects,1,
+{
+	type = "script",
+	effect_id = "shield_explosion_rocket"
+})
+
+table.insert(data.raw["projectile"]["explosive-cannon-projectile"].action.action_delivery.target_effects,1,
+{
+	type = "script",
+	effect_id = "shield_explosion_cannon"
+})
+
+table.insert(data.raw["projectile"]["explosive-uranium-cannon-projectile"].action.action_delivery.target_effects,1,
+{
+	type = "script",
+	effect_id = "shield_explosion_urnaium_cannon"
+})
+
+
+
+
+
+
