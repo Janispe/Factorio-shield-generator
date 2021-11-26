@@ -1,8 +1,8 @@
 --control.lua
 
--- list of all shield generators
+-- table of all shield generators
 local shieldGenerators = {}
--- this list is needed to determine, if a damager dealer with area damage(artilerry..) is already considered. Artileryy shells only 
+-- this table is needed to determine, if a damager dealer with area damage(artilerry..) is already considered. Artileryy shells only 
 -- deal 1000 damage to the shield and not 1000 * buildings in radius
 local projectiles_in_tick = {}
 -- leftDamage of a area projectile if the shield can not absorb all damage
@@ -10,60 +10,125 @@ local leftDamage = {}
 -- lastHealth of building. Needed to determine health after shield absorb damage.
 local lastHealth = {}
 
+local damageDealerTypes = {
+	shield_explosion_artillery = function() return 1000 end,
+	shield_explosion_grenade = function() return 1000 end,
+	explosive_rocket = function() return 1000 end,
+	explosive_cannon_projectile = function() return 1000 end,
+	explosive_uranium_cannon_projectile = function() return 1000 end
+}
+
+local source_lost = false
+local source_lost_table = {}
+
 script.on_event(defines.events.on_script_trigger_effect,
 	function(event)
-		local player = game.get_player(1)
 		local position = event.target_position 
-		for k,v in pairs(shieldGenerators) do
-			local distance = ((position.x - v.shield_entity.position.x)^2 + (position.y - v.shield_entity.position.y)^2)^(1/2)
-			if (distance <= v.radius) then
-				--v.current_shield = v.current_shield - 1000
-				--player.print(v.current_shield)
-			end		
-		end
+		local player = game.get_player(1)
+		player.print(event.target_position)
+		damage = damageDealerTypes[event.effect_id]()
+		source = event.source_entity 
 		
-		--player.print(event.target_entity)
-		--player.print(event.source_entity.name)
-		--player.print(event.target_position)
+		player.print(source)
+		player.print(damage)
+		
+		if (not (damage == nil)) then
+			if (source == nil) then
+				player.print("source")
+				source_lost = true
+				damage_left = 1.0
+				
+				for k,v in pairs(shieldGenerators) do
+					local distance = ((position.x - v.shield_entity.position.x)^2 + (position.y - v.shield_entity.position.y)^2)^(1/2)
+					if (distance <= v.radius) then
+						if (damage_left > 0) then
+							damage_left = dealDamageToShield2(damage_left * damage, v) / damage
+						end
+					end		
+				end
+				source = {damage_left = damage_left, position = position, couldBeProjectile = function(damage) return (damage == 500) end,
+							shielded = damage_left ~= damage}
+				table.insert(source_lost_table, source)
+				
+			else
+				leftDamage[source.unit_number] = 1.0
+				for k,v in pairs(shieldGenerators) do
+					local distance = ((position.x - v.shield_entity.position.x)^2 + (position.y - v.shield_entity.position.y)^2)^(1/2)
+					if (distance <= v.radius) then
+						if (leftDamage[source.unit_number] > 0) then
+							projectiles_in_tick[source.unit_number] = true
+							left = dealDamageToShield2(leftDamage[source.unit_number] * damage, v)
+							leftDamage[source.unit_number] = left / damage
+							player.print("left " .. left .. " " .. left / damage .. damage)
+						end
+					end		
+				end
+			end
+		end
 	end
 )
 
+function dealDamageToShield2(damage, generator)
+	if (generator.current_shield >= damage) then 
+		generator.current_shield = generator.current_shield - damage
+		return 0
+	else 
+		left = (damage - generator.current_shield)
+		generator.current_shield = 0
+		return left
+	end
+end	
+
 script.on_event(defines.events.on_entity_damaged,
 	function(event)
-		local player = game.get_player(1)
 		local position = event.entity.position
 		local source = event.cause
 		local damage = event.original_damage_amount
 		local entity = event.entity
-		player.print(source.name .. " " .. entity.name)
-		player.print(event.original_damage_amount .. " " .. entity.name)
-		player.print(event.damage_type.name)
-		player.print(position)
-		for k,v in pairs(shieldGenerators) do
-			local distance = ((position.x - v.shield_entity.position.x)^2 + (position.y - v.shield_entity.position.y)^2)^(1/2)
-			if (distance <= v.radius) then
-					player.print(tostring(projectiles_in_tick[source.unit_number]) .. " " .. entity.name)
-				if (projectiles_in_tick[source.unit_number]) then
-					player.print("projectile gemerkt")
-					entity.health = lastHealth[entity.unit_number] - leftDamage[source.unit_number] * event.final_damage_amount
-				else 
-					projectiles_in_tick[source.unit_number] = true
-					player.print(tostring(projectiles_in_tick[source.unit_number]) .. " " .. entity.name)
-					if (v.current_shield >= 1000) then 
-						v.current_shield = v.current_shield - 1000
-						leftDamage[source.unit_number] = 0
-						entity.health = lastHealth[entity.unit_number]
-					else 
-						leftDamage[source.unit_number] = (1000 - v.current_shield) / 1000
-						v.current_shield = 0
-						entity.health = lastHealth[entity.unit_number] - leftDamage[source.unit_number] * event.final_damage_amount
-					end
-				end
-				player.print(v.current_shield .. " " .. entity.name)
-			end	
+
+		if (entity.unit_number == nil) then
+			return
 		end
-	end
-)		
+
+		if (source_lost and source == nil) then
+			for k,v in pairs(source_lost_table) do
+				if (v.couldBeProjectile(damage)) then 
+					if (v.shielded) then
+						entity.health = lastHealth[entity.unit_number] - v.damage_left * event.final_damage_amount
+						lastHealth[entity.unit_number] = entity.health
+					end
+					return
+				end
+			end
+		end
+
+		if (leftDamage[source.unit_number] == nil) then
+			leftDamage[source.unit_number] = 1
+		end	
+		
+		shielded = false
+		
+		if (projectiles_in_tick[source.unit_number]) then
+			shielded = true
+		else 
+			for k,v in pairs(shieldGenerators) do
+				local distance = ((position.x - v.shield_entity.position.x)^2 + (position.y - v.shield_entity.position.y)^2)^(1/2)
+				if (distance <= v.radius) then
+					shielded = true
+					left = dealDamageToShield2(leftDamage[source.unit_number] * damage, v)
+					leftDamage[source.unit_number] = left / damage
+				end	
+			end
+		end
+		
+		if (leftDamage[source.unit_number] == 0) then
+			entity.health = lastHealth[entity.unit_number]
+		elseif (shielded == true) then
+			entity.health = lastHealth[entity.unit_number] - leftDamage[source.unit_number] * event.final_damage_amount
+			lastHealth[entity.unit_number] = entity.health
+		end
+	end)
+		
 
 script.on_event(defines.events.on_trigger_fired_artillery,
 	function(event)
@@ -95,7 +160,8 @@ script.on_event(defines.events.on_built_entity,
 			
 		if (event.created_entity.name == 'shield-generator') then
 			script.register_on_entity_destroyed(event.created_entity)
-		
+			lastHealth[event.created_entity.unit_number] = event.created_entity.health
+			
 			w, heigth = determineDimensions(event.created_entity)
 			
 			id1 = rendering.draw_rectangle({
@@ -121,7 +187,7 @@ script.on_event(defines.events.on_built_entity,
 			local shield_data = {
 				shield_entity = event.created_entity,
 				entity_id = event.created_entity.unit_number,
-				max_shield = 5000,
+				max_shield = 800,
 				current_shield = 0,
 				radius = 20,
 				width = w,
@@ -131,14 +197,14 @@ script.on_event(defines.events.on_built_entity,
 					filled = true, target = event.created_entity, surface = event.created_entity.surface})
 			}
 			table.insert(shieldGenerators,shield_data)
-			
+
 			local found = event.created_entity.surface.find_entities_filtered({
 			position = event.created_entity.position,
 			radius = 21
 			})
 			for k,v in pairs(found) do
 				-- trees have nil number
-				if (v.unit_number == not nil) then
+				if (v.unit_number ~= nil) then
 					lastHealth[v.unit_number] = v.health
 				end
 			end
@@ -148,10 +214,18 @@ script.on_event(defines.events.on_built_entity,
 
 script.on_event(defines.events.on_tick,
 	function(event)
+		clearSourceLost()
 		clearProjectiles()
 		chargeShieldGenerators()
 	end
 )
+
+function clearSourceLost() 
+	source_lost = false
+	for k,v in pairs (source_lost_table) do
+		source_lost_table[k] = nil
+	end
+end
 
 function clearProjectiles()
 	local player = game.get_player(1)
