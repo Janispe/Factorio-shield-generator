@@ -217,8 +217,15 @@ script.on_event(defines.events.on_tick,
 		clearSourceLost()
 		clearProjectiles()
 		chargeShieldGenerators()
+		clearDamage()
 	end
 )
+
+function clearDamage()
+	for k,v in pairs (leftDamage) do
+		leftDamage[k] = nil
+	end
+end
 
 function clearSourceLost() 
 	source_lost = false
