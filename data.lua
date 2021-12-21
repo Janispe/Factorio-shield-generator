@@ -1,3 +1,5 @@
+require("technologies")
+
 local beacon = data.raw.beacon.beacon
 
 local shield_generator = {

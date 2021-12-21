@@ -1,14 +1,43 @@
 --control.lua
 
 -- table of all shield generators
-local shieldGenerators = {}
+local shieldGenerators 
 -- this table is needed to determine, if a damager dealer with area damage(artilerry..) is already considered. Artileryy shells only 
 -- deal 1000 damage to the shield and not 1000 * buildings in radius
-local projectiles_in_tick = {}
+local projectiles_in_tick 
 -- leftDamage of a area projectile if the shield can not absorb all damage
-local leftDamage = {}
+local leftDamage 
 -- lastHealth of building. Needed to determine health after shield absorb damage.
-local lastHealth = {}
+local lastHealth 
+
+local source_lost
+
+local source_lost_table
+
+
+
+script.on_init(function()
+	global.shieldGenerators = {}
+	global.projectiles_in_tick = {}
+	global.leftDamage = {}
+	global.lastHealth = {}
+	global.source_lost_table = {}
+	global.source_lost = false
+	setValues()
+end)
+
+script.on_load(function()
+	setValues()
+end)
+
+function setValues() 
+	shieldGenerators = global.shieldGenerators
+	projectiles_in_tick = global.projectiles_in_tick
+	leftDamage = global.leftDamage
+	lastHealth = global.lastHealth
+	source_lost = global.source_lost
+	source_lost_table = global.source_lost_table
+end
 
 local damageDealerTypes = {
 	shield_explosion_artillery = function() return 1000 end,
@@ -17,9 +46,6 @@ local damageDealerTypes = {
 	explosive_cannon_projectile = function() return 1000 end,
 	explosive_uranium_cannon_projectile = function() return 1000 end
 }
-
-local source_lost = false
-local source_lost_table = {}
 
 script.on_event(defines.events.on_script_trigger_effect,
 	function(event)
@@ -37,6 +63,10 @@ script.on_event(defines.events.on_script_trigger_effect,
 				player.print("source")
 				source_lost = true
 				damage_left = 1.0
+
+				if (position == nil) then
+					position = event.source_position
+				end
 				
 				for k,v in pairs(shieldGenerators) do
 					local distance = ((position.x - v.shield_entity.position.x)^2 + (position.y - v.shield_entity.position.y)^2)^(1/2)
@@ -100,6 +130,20 @@ script.on_event(defines.events.on_entity_damaged,
 					return
 				end
 			end
+		elseif(source == nil) then
+			left = damage
+			shielded = false
+			for k,v in pairs(shieldGenerators) do
+				local distance = ((position.x - v.shield_entity.position.x)^2 + (position.y - v.shield_entity.position.y)^2)^(1/2)
+				if (distance <= v.radius) then
+					left = dealDamageToShield2(left, v)
+					shielded = true
+				end	
+			end
+			if (shielded == true) then
+				entity.health = lastHealth[entity.unit_number] - left
+			end
+			return
 		end
 
 		if (leftDamage[source.unit_number] == nil) then
